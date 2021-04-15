@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exploration Mapper</title>
+  <link rel="stylesheet" href="<%- baseUrl %>/stylesheets/style.css"/>
+  <link rel="stylesheet" href="<%- baseUrl %>/libs/leaflet/dist/leaflet.css"/>
+  <script src="<%- baseUrl %>/libs/leaflet/dist/leaflet.js"></script>
+  <script src="<%- baseUrl %>/libs/leaflet-freedraw/dist/leaflet-freedraw.web.js"></script>
+  <style>
+    html, body, #map {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    .is-loading, .is-loading * {
+      cursor: wait;
+    }
+  </style>
+</head>
+<body>
+<div id="map" class="map"></div>
+<script>var baseUrl = <%- JSON.stringify(baseUrl) %>;</script>
+<script src="<%- baseUrl %>/javascripts/map.js"></script>
+</body>
+</html>
