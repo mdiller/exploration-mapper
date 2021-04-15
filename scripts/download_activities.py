@@ -60,7 +60,8 @@ def download_activity_data(athlete_id):
 		"Authorization": f"Bearer {access_token}"
 	}
 
-	url = f"https://www.strava.com/api/v3/athletes/{athlete_id}/activities"
+	url = f"https://www.strava.com/api/v3/athletes/{athlete_id}/activities?per_page=200"
+	# todo: update this to work for multiple pages
 
 	print(f"] retrieving athlete {athlete_id} data")
 	result = requests.get(url, headers=headers)

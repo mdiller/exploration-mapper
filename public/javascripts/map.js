@@ -11,18 +11,18 @@ let body = document.getElementsByTagName("body")[0];
 
 // on startup, draw my route
 body.classList.add("is-loading");
-fetch(baseUrl + "route")
+fetch(baseUrl + "routes")
 	.then((response) => response.json())
-	.then((json) => {
-		var home = json[0].data[0];
+	.then((routes) => {
+		var home = routes[0][0].data[0];
 		mapparino.setView(new L.LatLng(home[0], home[1]), 14);
-		drawRoute(json);
+		routes.forEach(drawRoute);
 
 		// now get the data from around the starting point of this route
 		fetch(baseUrl + "road/" + home[0] + "/" + home[1])
 			.then((response) => response.json())
-			.then((json) => {
-				json.map(highlightRoad)
+			.then((roads) => {
+				roads.forEach(highlightRoad)
 				body.classList.remove("is-loading");
 			});
 	});
@@ -32,7 +32,7 @@ function highlightRoad(road) {
 	if (!road.id.includes("way")) {
 		return; // only draw ways
 	}
-	if (!road.visited) {
+	if (road.visited) {
 		return; // only draw visited roads
 	}
 	if (!road || !road.id) {
@@ -50,10 +50,12 @@ function highlightRoad(road) {
 		return;
 	}
 
+	let roadColor = "#ee0000";
+
 	let points = road.geometry.coordinates;
 	let roadLine = L.polyline(points, {
 			weight: 10,
-			color: "#6080ff",
+			color: roadColor,
 			opacity: 0.5
 		});
 	let roadDescription = `<strong>${road.properties.tags.name || "Unknown road"}</strong><br/>
@@ -65,6 +67,8 @@ function highlightRoad(road) {
 		})
 		.addTo(mapparino);
 
+
+
 	roadLine.addTo(mapparino);
 
 	roads[road.id] = roadLine;
@@ -74,14 +78,24 @@ function highlightRoad(road) {
 		L.DomEvent.stop(e);
 		deselectRoad(road.id);
 	});
+	roadLine.on("mouseover", function(e) {
+		this.setStyle({
+			color: "green"
+		});
+	});
+	roadLine.on("mouseout", function(e) {
+		this.setStyle({
+			color: roadColor
+		});
+	});
 }
 
 function drawRoute(route) {
 	let points = route[0].data;
 	let roadLine = L.polyline(points, {
-		weight: 10,
-		color: "#ee0000",
-		opacity: 1
+		weight: 5,
+		color: "#0000ee",
+		opacity: 0.75
 	});
 
 	roadLine.addTo(mapparino);

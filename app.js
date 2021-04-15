@@ -8,23 +8,28 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/libs", express.static(path.join(__dirname, "node_modules")));
 const overpass = require("query-overpass");
 
+var config = JSON.parse(fs.readFileSync("config.json"));
+
 var cache_dir = __dirname + "/cache";
 if (!fs.existsSync(cache_dir)) {
 	fs.mkdirSync(cache_dir);
 	console.log("] created cache dir");
 }
 
-const routes = [
-	JSON.parse(fs.readFileSync("cache/example_route.json"))
-];
+const routes = loadActivityRoutes(config["athlete_id"]);
 
-const route = routes[0];
-
-const roadMaxDist = 2500;
+const roadMaxDistFeet = 1500;
 const roadPercentExplored = 0.75;
 const roadFeetExploreRange = 50;
 const lat_padding = (roadFeetExploreRange * 2.0) / 364000.0;
 const long_padding = (roadFeetExploreRange * 2.0) / 288200.0;
+
+const home = routes[0][0].data[0];
+const global_bounds_min = [];
+const routePoints = routes
+	.map(r => r[0].data)
+	.flat();
+	// .filter(p => isInBounds(p, global_bounds_min, global_bounds_max));
 
 // gets the filename for the cache
 function cacheGetFilename(name) {
@@ -36,7 +41,7 @@ function cacheGetFilename(name) {
 // puts json data in the cache
 function cachePut(name, data) {
 	var filename = cacheGetFilename(name);
-	fs.writeFileSync(filename, JSON.stringify(data));
+	fs.writeFileSync(filename, JSON.stringify(data, null, "\t"));
 }
 
 // gets json data from cache if the name exists.
@@ -50,18 +55,24 @@ function cacheGet(name) {
 	}
 }
 
+// loads the activities for the given athlete 
+function loadActivityRoutes(athlete_id) {
+	var activities_list = cacheGet(`strava_athlete_${athlete_id}_activities`);
+	return activities_list.map(activity_info => cacheGet(`strava_activity_${activity_info.id}`));
+}
+
 // get the nearby roads
 function getNearbyRoads(lat, lon) {
-	var cache_name = `overpass_nearby_roads_${roadMaxDist}_${lat}_${lon}`;
+	var cache_name = `overpass_nearby_roads_${roadMaxDistFeet}_${lat}_${lon}`;
 
-	var data = cacheGet(cache_name);
-	if (data) {
-		return Promise.resolve(data);
-	}
+	// var data = cacheGet(cache_name);
+	// if (data) {
+	// 	return Promise.resolve(data);
+	// }
 
 	const query = `[out:json];
 			way
-			(around:${roadMaxDist},${lat},${lon})
+			(around:${roadMaxDistFeet},${lat},${lon})
 			["highway"];
 		(
 			._;
@@ -83,6 +94,29 @@ function getNearbyRoads(lat, lon) {
 					}
 					if (road.geometry.type != "LineString") {
 						return false;
+					}
+					if (road.properties.tags.surface == "ground") {
+						return false;
+					}
+					if (road.properties.tags.access == "private") {
+						return false;
+					}
+					if (road.properties.tags.indoor) {
+						return false;
+					}
+					if (["proposed", "service", "steps"].includes(road.properties.tags.highway)) {
+						return false;
+					}
+					if (road.properties.tags.bicycle) {
+						return road.properties.tags.bicycle == "yes";
+					}
+					if (road.properties.tags.highway == "footway") {
+						if (road.properties.tags.footway == "sidewalk") {
+							return false;
+						}
+						if (road.properties.tags.surface != "paved") {
+							return false;
+						}
 					}
 					return true;
 				});
@@ -120,9 +154,14 @@ function calcCrow(p1, p2)
 	return d * 3280.84; // convert to feet
 }
 
+// determines whether the given point p is in a box contained by the two bounding points
+// the bounding points should be: min is in top left (min values), max is in bottom right (max values)
+function isInBounds(p, bounds_min, bounds_max) {
+	return p[0] > bounds_min[0] && p[0] < bounds_max[0] && p[1] > bounds_min[1] && p[1] < bounds_max[1]
+}
+
 // converts numeric degrees to radians
-function toRad(Value) 
-{
+function toRad(Value) {
 	return Value * Math.PI / 180;
 }
 
@@ -133,10 +172,11 @@ function flagRoadIfVisited(road) {
 	}
 
 	var roadpoints = road.geometry.coordinates
-	var points = route[0].data;
 
 	var bounds_min = [ Math.min(...roadpoints.map(p => p[0])) - lat_padding, Math.min(...roadpoints.map(p => p[1])) - long_padding ];
 	var bounds_max = [ Math.max(...roadpoints.map(p => p[0])) + lat_padding, Math.max(...roadpoints.map(p => p[1])) + long_padding ];
+
+	var points = routePoints.filter(p => isInBounds(p, bounds_min, bounds_max));
 
 	let count = 0;
 	let thresh = road.geometry.coordinates.length * roadPercentExplored;
@@ -144,12 +184,10 @@ function flagRoadIfVisited(road) {
 		let p2 = roadpoints[i]
 		for (let j = 0; j < points.length; j++) {
 			let p1 = points[j];
-			if (p1[0] > bounds_min[0] && p1[0] < bounds_max[0] && p1[1] > bounds_min[1] && p1[1] < bounds_max[1]) {
-				var diff = calcCrow(p1, p2);
-				if (diff < roadFeetExploreRange) {
-					count++;
-					break;
-				}
+			var diff = calcCrow(p1, p2);
+			if (diff < roadFeetExploreRange) {
+				count++;
+				break;
 			}
 		}
 
@@ -166,7 +204,9 @@ app.use("/road/:lat/:lon", (req, res) => {
 		lon = parseFloat(req.params.lon);
 
 	getNearbyRoads(lat, lon).then(roads => {
+		console.log("filtering...");
 		roads.forEach(flagRoadIfVisited);
+		console.log("filtered!");
 		return res.json(roads);
 	}).catch(err => {
 		console.error(err)
@@ -175,8 +215,8 @@ app.use("/road/:lat/:lon", (req, res) => {
 });
 
 // requesting the route
-app.use("/route", (req, res) => {
-	return res.json(route)
+app.use("/routes", (req, res) => {
+	return res.json(routes)
 });
 
 // basic html return
