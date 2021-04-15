@@ -15,7 +15,7 @@ fetch(baseUrl + "route")
 	.then((response) => response.json())
 	.then((json) => {
 		var home = json[0].data[0];
-		mapparino.setView(new L.LatLng(home[0], home[1]), 15);
+		mapparino.setView(new L.LatLng(home[0], home[1]), 14);
 		drawRoute(json);
 
 		// now get the data from around the starting point of this route

@@ -8,21 +8,57 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/libs", express.static(path.join(__dirname, "node_modules")));
 const overpass = require("query-overpass");
 
+var cache_dir = __dirname + "/cache";
+if (!fs.existsSync(cache_dir)) {
+	fs.mkdirSync(cache_dir);
+	console.log("] created cache dir");
+}
+
 const routes = [
 	JSON.parse(fs.readFileSync("cache/example_route.json"))
 ];
 
 const route = routes[0];
 
-const roadMaxDist = 1500;
+const roadMaxDist = 2500;
 const roadPercentExplored = 0.75;
 const roadFeetExploreRange = 50;
 const lat_padding = (roadFeetExploreRange * 2.0) / 364000.0;
 const long_padding = (roadFeetExploreRange * 2.0) / 288200.0;
 
+// gets the filename for the cache
+function cacheGetFilename(name) {
+	name = name.replace(/[^a-zA-Z_0-9.]/g, "");
+	var filename = cache_dir + "/" + name + ".json"
+	return filename;
+}
+
+// puts json data in the cache
+function cachePut(name, data) {
+	var filename = cacheGetFilename(name);
+	fs.writeFileSync(filename, JSON.stringify(data));
+}
+
+// gets json data from cache if the name exists.
+function cacheGet(name) {
+	var filename = cacheGetFilename(name);
+	if (fs.existsSync(filename)) {
+		return JSON.parse(fs.readFileSync(filename))
+	}
+	else {
+		return null;
+	}
+}
 
 // get the nearby roads
 function getNearbyRoads(lat, lon) {
+	var cache_name = `overpass_nearby_roads_${roadMaxDist}_${lat}_${lon}`;
+
+	var data = cacheGet(cache_name);
+	if (data) {
+		return Promise.resolve(data);
+	}
+
 	const query = `[out:json];
 			way
 			(around:${roadMaxDist},${lat},${lon})
@@ -38,9 +74,10 @@ function getNearbyRoads(lat, lon) {
 			if (error) {
 				return reject(error);
 			} else if (roads.features.length < 1) {
-				return reject({statusCode: 404, message: "No roads found around given point"});
+				return reject({ statusCode: 404, message: "No roads found around given point" });
 			} else {
 				var roads = roads.features.filter(road => {
+					// filter out stuff that isnt a way line
 					if (!road.id.includes("way")) {
 						return false;
 					}
@@ -50,10 +87,11 @@ function getNearbyRoads(lat, lon) {
 					return true;
 				});
 				roads.forEach(road => {
+					// coords are in wrong order. put em in lat, lon
 					road.geometry.coordinates = road.geometry.coordinates.map(p => [ p[1], p[0] ]);
 				});
 				console.log(`${roads.length} roads`);
-				// fs.writeFileSync("cache/nearby_roads.json", JSON.stringify(roads));
+				cachePut(cache_name, roads);
 				return resolve(roads);
 			}
 		});
@@ -128,9 +166,7 @@ app.use("/road/:lat/:lon", (req, res) => {
 		lon = parseFloat(req.params.lon);
 
 	getNearbyRoads(lat, lon).then(roads => {
-		console.log("filtering");
 		roads.forEach(flagRoadIfVisited);
-		console.log("filtered");
 		return res.json(roads);
 	}).catch(err => {
 		console.error(err)
@@ -155,3 +191,5 @@ app.use(function (err, req, res, next) {
 });
 
 module.exports = app;
+
+console.log("] started!");
