@@ -1,0 +1,2 @@
+# Exploration Mapper
+The idea is to map out an area around my house, and see what roads nearby i haven't yet explored on my bike. Also maybe later I might implement a thing to make a street-view thing with gopro footage.
