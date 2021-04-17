@@ -104,13 +104,24 @@ function highlightRoad(road) {
 
 // mapparino.locate({setView: true, maxZoom: 16});
 
+var streetViewHideWord = "hide";
+var streetViewContainer = document.getElementById("streetview");
+var streetViewImg = document.getElementById("streetviewimg");
+var streetViewClose = document.getElementById("streetviewclose");
 mapparino.on("click", function (e) {
 	var point = [ e.latlng.lat, e.latlng.lng ];
-	var streetViewImg = document.getElementById("streetviewimg");
 	streetViewImg.src = `${baseUrl}streetview/${point[0]}/${point[1]}`
-	// alert(point);
-	// pop image up with url of thing
+	if (streetViewContainer.classList.contains(streetViewHideWord)) {
+		streetViewContainer.classList.remove(streetViewHideWord);
+	}
 });
+
+streetViewClose.onclick = function () {
+	if (!streetViewContainer.classList.contains(streetViewHideWord)) {
+		streetViewContainer.classList.add(streetViewHideWord);
+	}
+};
+
 
 function drawRoute(route) {
 	let points = route["latlng"].data;

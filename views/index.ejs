@@ -18,10 +18,13 @@
       cursor: wait;
     }
 
+    #streetview > div {
+      position: relative;
+    }
     #streetview {
       position: absolute;
-      width: 400px;
-      height: 300px;
+      width: 800px;
+      height: 600px;
       left: 20px;
       bottom: 20px;
       z-index: 1000;
@@ -32,11 +35,27 @@
       height: 100%;
       border-radius: 10px;
     }
+    #streetview.hide {
+      display: none;
+    }
+    #streetviewclose {
+      background: red;
+      width: 20px;
+      height: 20px;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
   </style>
 </head>
 <body>
 <div id="map" class="map"></div>
-<div id="streetview"><img id="streetviewimg" src="http://localhost:3000/streetview/45.51228667103572/-122.90197938680652"></div>
+<div id="streetview" class="hide">
+  <div>
+    <img id="streetviewimg" src="">
+    <div id="streetviewclose"></div>
+  </div>
+</div>
 <script>var baseUrl = <%- JSON.stringify(baseUrl) %>;</script>
 <script src="<%- baseUrl %>/javascripts/map.js"></script>
 </body>
