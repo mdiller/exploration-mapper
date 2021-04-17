@@ -77,7 +77,7 @@ def download_activity_data(athlete_id):
 			continue
 
 		print(f"] retrieving activity {activity_id} stream")
-		url = f"https://www.strava.com/api/v3/activities/{activity_id}/streams?keys=latlng"
+		url = f"https://www.strava.com/api/v3/activities/{activity_id}/streams?keys=latlng,time&key_by_type=true"
 		result = requests.get(url, headers=headers)
 		with open(filename, "w+") as f:
 			f.write(json.dumps(result.json(), indent="\t"))

@@ -17,10 +17,26 @@
     .is-loading, .is-loading * {
       cursor: wait;
     }
+
+    #streetview {
+      position: absolute;
+      width: 400px;
+      height: 300px;
+      left: 20px;
+      bottom: 20px;
+      z-index: 1000;
+      border-radius: 10px;
+    }
+    #streetview img {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+    }
   </style>
 </head>
 <body>
 <div id="map" class="map"></div>
+<div id="streetview"><img id="streetviewimg" src="http://localhost:3000/streetview/45.51228667103572/-122.90197938680652"></div>
 <script>var baseUrl = <%- JSON.stringify(baseUrl) %>;</script>
 <script src="<%- baseUrl %>/javascripts/map.js"></script>
 </body>

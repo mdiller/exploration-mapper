@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const app = express();
+const ffmpeg = require("fluent-ffmpeg");
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 app.use(express.static(path.join(__dirname, "public")));
@@ -16,6 +17,7 @@ if (!fs.existsSync(cache_dir)) {
 	console.log("] created cache dir");
 }
 
+var activityInfos = [];
 const routes = loadActivityRoutes(config["athlete_id"]);
 
 const roadMaxDistFeet = 1500;
@@ -24,12 +26,78 @@ const roadFeetExploreRange = 50;
 const lat_padding = (roadFeetExploreRange * 2.0) / 364000.0;
 const long_padding = (roadFeetExploreRange * 2.0) / 288200.0;
 
-const home = routes[0][0].data[0];
+const home = routes[0]["latlng"].data[0];
 const global_bounds_min = [];
 const routePoints = routes
-	.map(r => r[0].data)
+	.map(r => r["latlng"].data)
 	.flat();
-	// .filter(p => isInBounds(p, global_bounds_min, global_bounds_max));
+
+const videoInfos = {};
+
+var streetViewPoints = [];
+
+Date.prototype.addHours = function(h) {
+	this.setTime(this.getTime() + (h*60*60*1000));
+	return this;
+}
+Date.prototype.addSeconds = function(s) {
+	this.setTime(this.getTime() + (s*1000));
+	return this;
+}
+
+// loads all the video info into memory
+function loadVideoInfos(video_dir) {
+	fs.readdir(video_dir, (err, files) => {
+		files.forEach(file => {
+			var filepath = path.join(video_dir, file);
+			ffmpeg(filepath)
+				.ffprobe(0, function(err, data) {
+					var startDate = new Date(data.format.tags.creation_time);
+					startDate = startDate.addHours(7); // adjust for weird 7 hour offset (is flagged as UTC when it isnt)
+					var info = {
+						file: filepath,
+						start: startDate.toISOString(),
+						duration: data.format.duration
+					}
+					// console.dir(info);
+					videoInfos[filepath] = info;
+					loadStreetViewPoints(info);
+				});
+		});
+	});
+}
+
+// adds all streetview points that are recorded during this video
+function loadStreetViewPoints(video_info) {
+	var start = new Date(video_info.start);
+	var end = new Date(video_info.start).addSeconds(video_info.duration);
+	let newPoints = activityInfos.filter(activity => {
+		var aStart = new Date(activity.start_date);
+		var aEnd = new Date(activity.start_date).addSeconds(activity.elapsed_time);
+		return aStart < start && aEnd > end;
+	}).map(activity => {
+		var data = cacheGet(`strava_activity_${activity.id}`);
+		var result = [];
+		for(var i = 0; i < data.latlng.original_size; i++) {
+			var time = new Date(activity.start_date).addSeconds(data.time.data[i]);
+			result.push({
+				latlng: data.latlng.data[i],
+				time: time.toISOString()
+			});
+		}
+		return result;
+	}).flat()
+	.filter(point => {
+		var date = new Date(point.time);
+		return date > start && date < end;
+	})
+	.map(point => {
+		point.video = video_info.file;
+		point.seconds_in = ((new Date(point.time).getTime()) - start) / 1000;
+		return point;
+	});
+	streetViewPoints = streetViewPoints.concat(newPoints);
+}
 
 // gets the filename for the cache
 function cacheGetFilename(name) {
@@ -57,18 +125,18 @@ function cacheGet(name) {
 
 // loads the activities for the given athlete 
 function loadActivityRoutes(athlete_id) {
-	var activities_list = cacheGet(`strava_athlete_${athlete_id}_activities`);
-	return activities_list.map(activity_info => cacheGet(`strava_activity_${activity_info.id}`));
+	activityInfos = cacheGet(`strava_athlete_${athlete_id}_activities`);
+	return activityInfos.map(activity_info => cacheGet(`strava_activity_${activity_info.id}`));
 }
 
 // get the nearby roads
 function getNearbyRoads(lat, lon) {
 	var cache_name = `overpass_nearby_roads_${roadMaxDistFeet}_${lat}_${lon}`;
 
-	// var data = cacheGet(cache_name);
-	// if (data) {
-	// 	return Promise.resolve(data);
-	// }
+	var data = cacheGet(cache_name);
+	if (data) {
+		return Promise.resolve(data);
+	}
 
 	const query = `[out:json];
 			way
@@ -108,7 +176,7 @@ function getNearbyRoads(lat, lon) {
 						return false;
 					}
 					if (road.properties.tags.bicycle) {
-						return road.properties.tags.bicycle == "yes";
+						return ["yes", "designated"].includes(road.properties.tags.bicycle);
 					}
 					if (road.properties.tags.highway == "footway") {
 						if (road.properties.tags.footway == "sidewalk") {
@@ -198,6 +266,21 @@ function flagRoadIfVisited(road) {
 	}
 }
 
+async function extractFrame(video, seconds_in, filename) {
+	return new Promise((resolve,reject)=> {
+		ffmpeg(video)
+			.setStartTime(seconds_in)
+			.outputOptions("-vframes 1")
+			.saveToFile(filename)
+			.on("end", () => {
+				resolve();
+		})
+			.on("error",(err)=>{
+			return reject(new Error(err))
+		})
+	});
+}
+
 // requesting roads around this point
 app.use("/road/:lat/:lon", (req, res) => {
 	const lat = parseFloat(req.params.lat),
@@ -219,6 +302,36 @@ app.use("/routes", (req, res) => {
 	return res.json(routes)
 });
 
+// return closest streetview image i can find to this location
+app.get("/streetview/:lat/:lon", async (req, res) => {
+	console.log("doin streetview")
+	var target = [ parseFloat(req.params.lat), parseFloat(req.params.lon) ];
+
+	console.log(streetViewPoints.length);
+	var bestPoint = null;
+	var bestPointScore = Infinity;
+	for (var i = 0; i < streetViewPoints.length; i++) {
+		var score = calcCrow(streetViewPoints[i].latlng, target);
+		if (score < bestPointScore) {
+			bestPoint = streetViewPoints[i];
+			bestPointScore = score;
+		}
+	}
+	var videoFile = bestPoint.video;
+	var secondsIn = bestPoint.seconds_in;
+
+	console.log("found point");
+	var filename = "./cache/temp.jpg";
+	try {
+		await extractFrame(videoFile, secondsIn, filename);
+		res.sendFile(path.resolve(filename));
+	}
+	catch (err) {
+		console.error(err);
+		res.status(500).json(err);
+	}
+});
+
 // basic html return
 app.use("/", (req, res) => {
 	res.render("index", { baseUrl: req.baseUrl });
@@ -231,5 +344,7 @@ app.use(function (err, req, res, next) {
 });
 
 module.exports = app;
+
+loadVideoInfos("./cache/videos");
 
 console.log("] started!");

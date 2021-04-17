@@ -14,7 +14,7 @@ body.classList.add("is-loading");
 fetch(baseUrl + "routes")
 	.then((response) => response.json())
 	.then((routes) => {
-		var home = routes[0][0].data[0];
+		var home = routes[0]["latlng"].data[0];
 		mapparino.setView(new L.LatLng(home[0], home[1]), 14);
 		routes.forEach(drawRoute);
 
@@ -90,8 +90,30 @@ function highlightRoad(road) {
 	});
 }
 
+// location found stuff
+
+// mapparino.on("locationfound", function (e) {
+// 	L.marker(e.latlng)
+// 		.bindTooltip("you are here", { sticky: true })
+// 		.addTo(mapparino);
+// });
+
+// mapparino.on("locationerror", function (e) {
+// 	alert(e.message);
+// });
+
+// mapparino.locate({setView: true, maxZoom: 16});
+
+mapparino.on("click", function (e) {
+	var point = [ e.latlng.lat, e.latlng.lng ];
+	var streetViewImg = document.getElementById("streetviewimg");
+	streetViewImg.src = `${baseUrl}streetview/${point[0]}/${point[1]}`
+	// alert(point);
+	// pop image up with url of thing
+});
+
 function drawRoute(route) {
-	let points = route[0].data;
+	let points = route["latlng"].data;
 	let roadLine = L.polyline(points, {
 		weight: 5,
 		color: "#0000ee",
