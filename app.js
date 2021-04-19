@@ -4,6 +4,7 @@ const fs = require("fs");
 const app = express();
 const ffmpeg = require("fluent-ffmpeg");
 const strava = require("strava-v3");
+const util = require("util")
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 app.use(express.static(path.join(__dirname, "public")));
@@ -17,6 +18,10 @@ if (!fs.existsSync(cache_dir)) {
 	fs.mkdirSync(cache_dir);
 	console.log("] created cache dir");
 }
+
+// promisified fs stuff
+const fs_readdir = util.promisify(fs.readdir);
+
 
 const activities = [];
 
@@ -58,7 +63,7 @@ async function startup() {
 	.map(r => r.data.map(p => p.latlng))
 	.flat();
 
-	loadVideoInfos("./cache/videos");
+	await loadVideoInfos("./cache/videos");
 
 	console.log("] done!");
 }
@@ -162,28 +167,39 @@ Date.prototype.addSeconds = function(s) {
 
 // loads all the video info into memory
 async function loadVideoInfos(video_dir) {
+	console.log("] loading videos...");
 	if (!fs.existsSync(video_dir)) {
-		console.log("video_dir file doesn't exist, skipping this loading");
+		console.log("] video_dir file doesn't exist, skipping this loading");
 		return;
 	}
-	fs.readdir(video_dir, (err, files) => {
-		files.forEach(file => {
-			var filepath = path.join(video_dir, file);
+	var files = await fs_readdir(video_dir);
+
+	for (const file of files) {
+		console.log(`] loading ${file}`);
+		var filepath = path.join(video_dir, file);
+		var ffprobe_data = await (new Promise((resolve, reject) => {
 			ffmpeg(filepath)
-				.ffprobe(0, function(err, data) {
-					var startDate = new Date(data.format.tags.creation_time);
-					startDate = startDate.addHours(7); // adjust for weird 7 hour offset (is flagged as UTC when it isnt)
-					var info = {
-						file: filepath,
-						start: startDate.toISOString(),
-						duration: data.format.duration
-					}
-					// console.dir(info);
-					videoInfos[filepath] = info;
-					loadStreetViewPoints(info);
-				});
-		});
-	});
+			.ffprobe(0, function(err, data) {
+				if (err) {
+					reject(err);
+				}
+				else {
+					resolve(data);
+				}
+			});
+		}));
+		var startDate = new Date(ffprobe_data.format.tags.creation_time);
+		startDate = startDate.addHours(7); // adjust for weird 7 hour offset (is flagged as UTC when it isnt)
+		var info = {
+			file: filepath,
+			start: startDate.toISOString(),
+			duration: ffprobe_data.format.duration
+		}
+		videoInfos[filepath] = info;
+		loadStreetViewPoints(info);
+	}
+
+	console.log("] videos loaded!");
 }
 
 // adds all streetview points that are recorded during this video
@@ -250,6 +266,7 @@ function getNearbyRoads(lat, lon) {
 		return Promise.resolve(data);
 	}
 
+	console.log("retrieving overpass data for nearby roads...");
 	const query = `[out:json];
 			way
 			(around:${roadMaxDistFeet},${lat},${lon})
@@ -304,7 +321,7 @@ function getNearbyRoads(lat, lon) {
 					// coords are in wrong order. put em in lat, lon
 					road.geometry.coordinates = road.geometry.coordinates.map(p => [ p[1], p[0] ]);
 				});
-				console.log(`${roads.length} roads`);
+				console.log(`${roads.length} roads retrieved`);
 				cachePut(cache_name, roads);
 				return resolve(roads);
 			}
@@ -399,9 +416,7 @@ app.use("/road/:lat/:lon", (req, res) => {
 		lon = parseFloat(req.params.lon);
 
 	getNearbyRoads(lat, lon).then(roads => {
-		console.log("filtering...");
 		roads.forEach(flagRoadIfVisited);
-		console.log("filtered!");
 		return res.json(roads);
 	}).catch(err => {
 		console.error(err)

@@ -28,7 +28,8 @@ And then connect your browser to localhost:3000 and be good to go!
 - [x] Get the unexplored-roads up and running
 - [x] Implement initial streetview stuff
 - [x] Integrate the strava stuff into javascript so python script isnt needed anymore
-- [ ] Clean up the server code to be a lot better structured with proper await/async stuff
+- [x] Rework a bunch of the server code to use async await stuff properly
+- [ ] Clean up the server code to be a lot better structured
 - [ ] Set it up to work on docker
 - [ ] Clean up the map and frontend UI
 - [x] Make a thing for the strava auth code thing so its much more streamlined
