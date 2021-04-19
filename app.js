@@ -33,9 +33,25 @@ const videoInfos = {};
 
 var streetViewPoints = [];
 
+var strava_needs_token = false;
+
 
 (async() => {
-	await loadStravaStuff();
+	await startup();
+})();
+
+async function startup() {
+	console.log("] starting up...");
+
+	var strava_access_token = await getStravaAccessToken();
+	if (strava_access_token == null) {
+		strava_needs_token = true;
+		// we need a new token to continue, so lets just exit here, and delay startup until later
+		return;
+	}
+	strava_needs_token = false;
+
+	await loadStravaStuff(strava_access_token);
 
 	// load all latlng points from routes
 	routePoints = activities
@@ -45,10 +61,10 @@ var streetViewPoints = [];
 	loadVideoInfos("./cache/videos");
 
 	console.log("] done!");
-})();
+}
 
 // gets the strava access token
-async function getStravaAccessToken() {
+async function getStravaAccessToken(code) {
 	var cache_name = "strava_tokens";
 	var strava_tokens = cacheGet("strava_tokens");
 	strava.config({
@@ -69,14 +85,14 @@ async function getStravaAccessToken() {
 	else {
 		// generating a new token
 		try {
-			strava_tokens = await strava.oauth.getToken(config.strava_api.code);
+			strava_tokens = await strava.oauth.getToken(code);
 		}
 		catch (err) {
 			if (err.statusCode == 400) {
-				console.error(`You gotta go to the url to get a new code: http://www.strava.com/oauth/authorize?client_id=${config.strava_api.client_id}&response_type=code&redirect_uri=http://localhost/exchange_token&approval_prompt=force&scope=profile:read_all,activity:read_all`)
-				console.error("It'll redirect you to a thing that doesnt exist, and you can grab the access code from the url, then put that in the config.json for your 'code'");
-				// TODO: automate this shit
-				process.exit(1);
+				// wait for a user to try to connect, then prompt them to authorize so i can get access token
+				console.log("] need strava access token to continue, connect to server to get prompted");
+				strava_needs_token = true;
+				return null;
 			}
 			else {
 				console.error(err);
@@ -91,9 +107,7 @@ async function getStravaAccessToken() {
 }
 
 // loads the strava stuff
-async function loadStravaStuff() {
-	var access_token = await getStravaAccessToken();
-
+async function loadStravaStuff(access_token) {
 	console.log("] retrieving activities...");
 	const activity_infos = await strava.athlete.listActivities({ 
 		access_token: access_token,
@@ -415,7 +429,7 @@ app.get("/streetview/:lat/:lon", async (req, res) => {
 	}
 	var videoFile = bestPoint.video;
 	var secondsIn = bestPoint.seconds_in;
-	
+
 	var filename = "./cache/temp.jpg";
 	try {
 		await extractFrame(videoFile, secondsIn, filename);
@@ -427,8 +441,24 @@ app.get("/streetview/:lat/:lon", async (req, res) => {
 	}
 });
 
+app.use("/strava_token_authentication", async (req, res) => {
+	await getStravaAccessToken(req.query.code);
+
+	// now we can do a full startup because we have a valid token
+	await startup();
+
+	res.redirect(req.protocol + "://" + req.get("host"));
+});
+
 // basic html return
 app.use("/", (req, res) => {
+	if (strava_needs_token) {
+		var redirect_uri = req.protocol + "://" + req.get("host") + req.baseUrl + "/" + "strava_token_authentication";
+		var strava_auth_url = `http://www.strava.com/oauth/authorize?client_id=${config.strava_api.client_id}&response_type=code&redirect_uri=${redirect_uri}&approval_prompt=force&scope=profile:read_all,activity:read_all`
+		res.redirect(strava_auth_url);
+		return;
+	}
+
 	res.render("index", { baseUrl: req.baseUrl });
 });
 
@@ -437,5 +467,6 @@ app.use(function (err, req, res, next) {
 	console.log(err);
 	res.json(err);
 });
+
 
 module.exports = app;
