@@ -30,10 +30,10 @@ And then connect your browser to localhost:3000 and be good to go!
 - [x] Integrate the strava stuff into javascript so python script isnt needed anymore
 - [x] Rework a bunch of the server code to use async await stuff properly
 - [ ] Clean up the server code to be a lot better structured
-- [ ] Set it up to work on docker
+- [x] Set it up to work on docker
 - [ ] Clean up the map and frontend UI
 - [x] Make a thing for the strava auth code thing so its much more streamlined
 - [x] Add a setup section to the readme so it shows how to start it up
 - [ ] Make video startable from the streetview preview thing
 - [ ] Setup a script to auto-grab the video from gopro and then delete
-
+- [ ] Setup a basic auth thing so i can have it be public but still private
