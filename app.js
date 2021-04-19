@@ -433,6 +433,13 @@ app.use("/activities", (req, res) => {
 app.get("/streetview/:lat/:lon", async (req, res) => {
 	var target = [ parseFloat(req.params.lat), parseFloat(req.params.lon) ];
 
+	if (streetViewPoints.length == 0) {
+		res.status(404).json({
+			"message": "no video data available"
+		});
+		return;
+	}
+
 	var bestPoint = null;
 	var bestPointScore = Infinity;
 	for (var i = 0; i < streetViewPoints.length; i++) {
