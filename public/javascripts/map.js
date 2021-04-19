@@ -11,12 +11,12 @@ let body = document.getElementsByTagName("body")[0];
 
 // on startup, draw my route
 body.classList.add("is-loading");
-fetch(baseUrl + "routes")
+fetch(baseUrl + "activities")
 	.then((response) => response.json())
-	.then((routes) => {
-		var home = routes[0]["latlng"].data[0];
+	.then((activities) => {
+		var home = activities[0].data[0].latlng;
 		mapparino.setView(new L.LatLng(home[0], home[1]), 14);
-		routes.forEach(drawRoute);
+		activities.forEach(drawActivity);
 
 		// now get the data from around the starting point of this route
 		fetch(baseUrl + "road/" + home[0] + "/" + home[1])
@@ -123,8 +123,8 @@ streetViewClose.onclick = function () {
 };
 
 
-function drawRoute(route) {
-	let points = route["latlng"].data;
+function drawActivity(route) {
+	let points = route.data.map(d => d.latlng);
 	let roadLine = L.polyline(points, {
 		weight: 5,
 		color: "#0000ee",

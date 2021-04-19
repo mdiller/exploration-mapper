@@ -36,7 +36,6 @@ def get_strava_token():
 					"refresh_token": data["refresh_token"]
 				})
 			strava_tokens = response.json()
-
 	else:
 		print(f"] generating a new token")
 		response = requests.post(

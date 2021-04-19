@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const app = express();
 const ffmpeg = require("fluent-ffmpeg");
+const strava = require("strava-v3");
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 app.use(express.static(path.join(__dirname, "public")));
@@ -17,8 +18,7 @@ if (!fs.existsSync(cache_dir)) {
 	console.log("] created cache dir");
 }
 
-var activityInfos = [];
-const routes = loadActivityRoutes(config["athlete_id"]);
+const activities = [];
 
 const roadMaxDistFeet = 1500;
 const roadPercentExplored = 0.75;
@@ -26,15 +26,116 @@ const roadFeetExploreRange = 50;
 const lat_padding = (roadFeetExploreRange * 2.0) / 364000.0;
 const long_padding = (roadFeetExploreRange * 2.0) / 288200.0;
 
-const home = routes[0]["latlng"].data[0];
 const global_bounds_min = [];
-const routePoints = routes
-	.map(r => r["latlng"].data)
-	.flat();
+var routePoints = []
 
 const videoInfos = {};
 
 var streetViewPoints = [];
+
+
+(async() => {
+	await loadStravaStuff();
+
+	// load all latlng points from routes
+	routePoints = activities
+	.map(r => r.data.map(p => p.latlng))
+	.flat();
+
+	loadVideoInfos("./cache/videos");
+
+	console.log("] done!");
+})();
+
+// gets the strava access token
+async function getStravaAccessToken() {
+	var cache_name = "strava_tokens";
+	var strava_tokens = cacheGet("strava_tokens");
+	strava.config({
+		"client_id": config.strava_api.client_id,
+		"client_secret": config.strava_api.client_secret
+	});
+
+	if (strava_tokens != null) {
+		if (strava_tokens.expires_at > (Date.now() / 1000)) {
+			// using existing token, as it hasn't expired
+			return strava_tokens.access_token;
+		}
+		else {
+			// refreshing an existing (expired) token
+			strava_tokens = await strava.oauth.refreshToken(strava_tokens.refresh_token);
+		}
+	}
+	else {
+		// generating a new token
+		try {
+			strava_tokens = await strava.oauth.getToken(config.strava_api.code);
+		}
+		catch (err) {
+			if (err.statusCode == 400) {
+				console.error(`You gotta go to the url to get a new code: http://www.strava.com/oauth/authorize?client_id=${config.strava_api.client_id}&response_type=code&redirect_uri=http://localhost/exchange_token&approval_prompt=force&scope=profile:read_all,activity:read_all`)
+				console.error("It'll redirect you to a thing that doesnt exist, and you can grab the access code from the url, then put that in the config.json for your 'code'");
+				// TODO: automate this shit
+				process.exit(1);
+			}
+			else {
+				console.error(err);
+				process.exit(1);
+			}
+		}
+	}
+	// save the new token data
+	cachePut(cache_name, strava_tokens);
+
+	return strava_tokens.access_token;
+}
+
+// loads the strava stuff
+async function loadStravaStuff() {
+	var access_token = await getStravaAccessToken();
+
+	console.log("] retrieving activities...");
+	const activity_infos = await strava.athlete.listActivities({ 
+		access_token: access_token,
+		per_page: 200
+	});
+	cachePut("strava_athlete_activities", activities);
+
+	for (const activity_info of activity_infos) {
+		var activity_cache_name = `strava_activity_${activity_info.id}`;
+		var activity_data = cacheGet(activity_cache_name);
+
+		if (activity_data == null) {
+			console.log(`] retrieving activity ${activity_info.id} data...`);
+			activity_data = await strava.streams.activity({
+				access_token: access_token,
+				id: activity_info.id,
+				types: "latlng,time"
+			});
+			cachePut(activity_cache_name, activity_data);
+		}
+		else {
+			console.log(`] activity ${activity_info.id} retrieved from cache`);
+		}
+		var data = [];
+
+		for (let i = 0; i < activity_data[0].original_size; i++) {
+			var point = {};
+			for (const part of activity_data) {
+				point[part.type] = part.data[i];
+			}
+			data.push(point);
+		}
+
+		activity_info.data = data;
+
+		// pushing to global variable
+		activities.push(activity_info);
+	}
+
+	console.log("] strava loaded!")
+}
+
 
 Date.prototype.addHours = function(h) {
 	this.setTime(this.getTime() + (h*60*60*1000));
@@ -46,7 +147,11 @@ Date.prototype.addSeconds = function(s) {
 }
 
 // loads all the video info into memory
-function loadVideoInfos(video_dir) {
+async function loadVideoInfos(video_dir) {
+	if (!fs.existsSync(video_dir)) {
+		console.log("video_dir file doesn't exist, skipping this loading");
+		return;
+	}
 	fs.readdir(video_dir, (err, files) => {
 		files.forEach(file => {
 			var filepath = path.join(video_dir, file);
@@ -71,17 +176,16 @@ function loadVideoInfos(video_dir) {
 function loadStreetViewPoints(video_info) {
 	var start = new Date(video_info.start);
 	var end = new Date(video_info.start).addSeconds(video_info.duration);
-	let newPoints = activityInfos.filter(activity => {
+	let newPoints = activities.filter(activity => {
 		var aStart = new Date(activity.start_date);
 		var aEnd = new Date(activity.start_date).addSeconds(activity.elapsed_time);
 		return aStart < start && aEnd > end;
 	}).map(activity => {
-		var data = cacheGet(`strava_activity_${activity.id}`);
 		var result = [];
-		for(var i = 0; i < data.latlng.original_size; i++) {
-			var time = new Date(activity.start_date).addSeconds(data.time.data[i]);
+		for(var i = 0; i < activity.data.length; i++) {
+			var time = new Date(activity.start_date).addSeconds(activity.data[i].time);
 			result.push({
-				latlng: data.latlng.data[i],
+				latlng: activity.data[i].latlng,
 				time: time.toISOString()
 			});
 		}
@@ -121,12 +225,6 @@ function cacheGet(name) {
 	else {
 		return null;
 	}
-}
-
-// loads the activities for the given athlete 
-function loadActivityRoutes(athlete_id) {
-	activityInfos = cacheGet(`strava_athlete_${athlete_id}_activities`);
-	return activityInfos.map(activity_info => cacheGet(`strava_activity_${activity_info.id}`));
 }
 
 // get the nearby roads
@@ -297,17 +395,15 @@ app.use("/road/:lat/:lon", (req, res) => {
 	});
 });
 
-// requesting the route
-app.use("/routes", (req, res) => {
-	return res.json(routes)
+// requesting the activities
+app.use("/activities", (req, res) => {
+	return res.json(activities)
 });
 
 // return closest streetview image i can find to this location
 app.get("/streetview/:lat/:lon", async (req, res) => {
-	console.log("doin streetview")
 	var target = [ parseFloat(req.params.lat), parseFloat(req.params.lon) ];
 
-	console.log(streetViewPoints.length);
 	var bestPoint = null;
 	var bestPointScore = Infinity;
 	for (var i = 0; i < streetViewPoints.length; i++) {
@@ -319,8 +415,7 @@ app.get("/streetview/:lat/:lon", async (req, res) => {
 	}
 	var videoFile = bestPoint.video;
 	var secondsIn = bestPoint.seconds_in;
-
-	console.log("found point");
+	
 	var filename = "./cache/temp.jpg";
 	try {
 		await extractFrame(videoFile, secondsIn, filename);
@@ -344,7 +439,3 @@ app.use(function (err, req, res, next) {
 });
 
 module.exports = app;
-
-loadVideoInfos("./cache/videos");
-
-console.log("] started!");
