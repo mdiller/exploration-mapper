@@ -6,7 +6,9 @@
 
 var app = require("../app");
 var debug = require("debug")("esn:server");
+var fs = require("fs");
 var http = require("http");
+var https = require("https");
 
 /**
  * Get port from environment and store in Express.
@@ -28,6 +30,17 @@ var server = http.createServer(app);
 server.listen(port);
 server.on("error", onError);
 server.on("listening", onListening);
+
+var config = JSON.parse(fs.readFileSync("config.json"));
+if (config.ssl) {
+	https.createServer({
+		key: fs.readFileSync(config.ssl.key, "utf8"),
+		cert: fs.readFileSync(config.ssl.certificate, "utf8")
+	}, app).listen(config.ssl.port);
+}
+else {
+	console.dir(config);
+}
 
 /**
  * Normalize a port into a number, string, or false.
