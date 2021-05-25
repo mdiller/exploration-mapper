@@ -6,9 +6,11 @@
 		"start": "node ./bin/www"
 	},
 	"dependencies": {
+		"@savvyplatform/ffprobe-static": "^4.3.1",
 		"async": "^2.1.5",
 		"ejs": "~2.5.5",
 		"express": "^4.17.1",
+		"ffmpeg-static": "^4.3.0",
 		"fluent-ffmpeg": "^2.1.2",
 		"leaflet": "^1.0.3",
 		"leaflet-freedraw": "^2.1.0",

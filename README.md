@@ -21,6 +21,8 @@ npm start
 
 And then connect your browser to localhost:3000 and be good to go!
 
+Note that if you want to use the video stuff, you'll have to install ffmpeg and ffprobe. If running this via docker, set PATH to include the binaries included by the static npm packages that have been added.
+
 # Todo
 
 - [x] Figure out strava api and connections
