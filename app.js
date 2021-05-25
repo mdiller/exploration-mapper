@@ -34,6 +34,10 @@ const long_padding = (roadFeetExploreRange * 2.0) / 288200.0;
 const global_bounds_min = [];
 var routePoints = []
 
+var videoDir = config.video_dir;
+if (videoDir == undefined) {
+	videoDir = "./cache/videos"
+}
 const videoInfos = {};
 
 var streetViewPoints = [];
@@ -63,7 +67,8 @@ async function startup() {
 	.map(r => r.data.map(p => p.latlng))
 	.flat();
 
-	await loadVideoInfos("./cache/videos");
+
+	await loadVideoInfos(videoDir);
 
 	console.log("] done!");
 }
@@ -175,6 +180,9 @@ async function loadVideoInfos(video_dir) {
 	var files = await fs_readdir(video_dir);
 
 	for (const file of files) {
+		if (!(file.endsWith("MP4") || file.endsWith("mp4"))) {
+			continue; // skip things that arent videos
+		}
 		console.log(`] loading ${file}`);
 		var filepath = path.join(video_dir, file);
 		var ffprobe_data = await (new Promise((resolve, reject) => {
@@ -190,12 +198,15 @@ async function loadVideoInfos(video_dir) {
 		}));
 		var startDate = new Date(ffprobe_data.format.tags.creation_time);
 		startDate = startDate.addHours(7); // adjust for weird 7 hour offset (is flagged as UTC when it isnt)
+		var name = path.basename(filepath).split(".").slice(0, -1).join(".");
 		var info = {
 			file: filepath,
+			name: name,
 			start: startDate.toISOString(),
-			duration: ffprobe_data.format.duration
+			duration: ffprobe_data.format.duration,
+			data: []
 		}
-		videoInfos[filepath] = info;
+		videoInfos[name] = info;
 		loadStreetViewPoints(info);
 	}
 
@@ -226,8 +237,9 @@ function loadStreetViewPoints(video_info) {
 		return date > start && date < end;
 	})
 	.map(point => {
-		point.video = video_info.file;
+		point.video = video_info.name;
 		point.seconds_in = ((new Date(point.time).getTime()) - start) / 1000;
+		video_info.data.push(point);
 		return point;
 	});
 	streetViewPoints = streetViewPoints.concat(newPoints);
@@ -424,9 +436,14 @@ app.use("/road/:lat/:lon", (req, res) => {
 	});
 });
 
+// requesting video information
+app.use("/videoinfos", (req, res) => {
+	return res.json(videoInfos);
+});
+
 // requesting the activities
 app.use("/activities", (req, res) => {
-	return res.json(activities)
+	return res.json(activities);
 });
 
 // return closest streetview image i can find to this location

@@ -6,26 +6,56 @@ let osmLayer = new L.TileLayer(osmUrl, {minZoom: 3, maxZoom: 19, attribution: os
 let mapparino = new L.Map("map");
 mapparino.addLayer(osmLayer);
 
-let roads = {};
 let body = document.getElementsByTagName("body")[0];
+let roads = [];
+let activities = [];
+let videoInfos = {};
+let videoPoints = [];
 
-// on startup, draw my route
-body.classList.add("is-loading");
-fetch(baseUrl + "activities")
-	.then((response) => response.json())
-	.then((activities) => {
-		var home = activities[0].data[0].latlng;
-		mapparino.setView(new L.LatLng(home[0], home[1]), 14);
-		activities.forEach(drawActivity);
 
-		// now get the data from around the starting point of this route
-		fetch(baseUrl + "road/" + home[0] + "/" + home[1])
-			.then((response) => response.json())
-			.then((roads) => {
-				roads.forEach(highlightRoad)
-				body.classList.remove("is-loading");
-			});
+console.log("test");
+
+(async() => {
+	await startup();
+})();
+console.log("test2");
+
+async function startup() {
+	console.log("test1");
+
+	// fetch and draw activities
+	body.classList.add("is-loading");
+	var response = await fetch(baseUrl + "activities");
+	activities = await response.json();
+
+	var home = activities[activities.length - 1].data[0].latlng;
+	mapparino.setView(new L.LatLng(home[0], home[1]), 14);
+	activities.forEach(drawActivity);
+
+
+	// fetch and draw video paths
+	body.classList.add("is-loading");
+	response = await fetch(baseUrl + "videoinfos");
+	videoInfos = await response.json();
+	videoPoints = videoInfos.map(v => v.data).reduce((a, b) => a.concat(b));
+
+	Object.keys(videoInfos).forEach(key => {
+		drawVideoPath(videoInfos[key]);
 	});
+
+
+	// fetch and draw roads
+	response = await fetch(baseUrl + "road/" + home[0] + "/" + home[1]);
+	roads = await response.json();
+
+	roads.forEach(highlightRoad);
+
+
+	body.classList.remove("is-loading");
+	console.log("done!");
+}
+
+
 
 // highlight the given road
 function highlightRoad(road) {
@@ -128,6 +158,17 @@ function drawActivity(route) {
 	let roadLine = L.polyline(points, {
 		weight: 5,
 		color: "#0000ee",
+		opacity: 0.75
+	});
+
+	roadLine.addTo(mapparino);
+}
+
+function drawVideoPath(videoInfo) {
+	let points = videoInfo.data.map(d => d.latlng);
+	let roadLine = L.polyline(points, {
+		weight: 5,
+		color: "#00eeee",
 		opacity: 0.75
 	});
 
