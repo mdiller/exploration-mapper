@@ -363,15 +363,15 @@ function calcCrow(p1, p2)
 	return d * 3280.84; // convert to feet
 }
 
+// converts numeric degrees to radians
+function toRad(Value) {
+	return Value * Math.PI / 180;
+}
+
 // determines whether the given point p is in a box contained by the two bounding points
 // the bounding points should be: min is in top left (min values), max is in bottom right (max values)
 function isInBounds(p, bounds_min, bounds_max) {
 	return p[0] > bounds_min[0] && p[0] < bounds_max[0] && p[1] > bounds_min[1] && p[1] < bounds_max[1]
-}
-
-// converts numeric degrees to radians
-function toRad(Value) {
-	return Value * Math.PI / 180;
 }
 
 // flags the road as visited if we"ve been to it
@@ -447,8 +447,9 @@ app.use("/activities", (req, res) => {
 });
 
 // return closest streetview image i can find to this location
-app.get("/streetview/:lat/:lon", async (req, res) => {
-	var target = [ parseFloat(req.params.lat), parseFloat(req.params.lon) ];
+app.get("/streetview/:video/:seconds_in", async (req, res) => {
+	var video = req.params.video;
+	var seconds_in = parseInt(req.params.seconds_in);
 
 	if (streetViewPoints.length == 0) {
 		res.status(404).json({
@@ -456,22 +457,18 @@ app.get("/streetview/:lat/:lon", async (req, res) => {
 		});
 		return;
 	}
-
-	var bestPoint = null;
-	var bestPointScore = Infinity;
-	for (var i = 0; i < streetViewPoints.length; i++) {
-		var score = calcCrow(streetViewPoints[i].latlng, target);
-		if (score < bestPointScore) {
-			bestPoint = streetViewPoints[i];
-			bestPointScore = score;
-		}
+	if (!(video in videoInfos)) {
+		res.status(404).json({
+			"message": "video not found"
+		});
+		return;
 	}
-	var videoFile = bestPoint.video;
-	var secondsIn = bestPoint.seconds_in;
+
+	var videoFile = videoInfos[video].file;
 
 	var filename = "./cache/temp.jpg";
 	try {
-		await extractFrame(videoFile, secondsIn, filename);
+		await extractFrame(videoFile, seconds_in, filename);
 		res.sendFile(path.resolve(filename));
 	}
 	catch (err) {

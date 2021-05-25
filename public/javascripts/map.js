@@ -10,18 +10,18 @@ let body = document.getElementsByTagName("body")[0];
 let roads = [];
 let activities = [];
 let videoInfos = {};
-let videoPoints = [];
+let streetViewPoints = [];
 
 
-console.log("test");
+let streetViewMarker = null;
+
+
 
 (async() => {
 	await startup();
 })();
-console.log("test2");
 
 async function startup() {
-	console.log("test1");
 
 	// fetch and draw activities
 	body.classList.add("is-loading");
@@ -37,7 +37,7 @@ async function startup() {
 	body.classList.add("is-loading");
 	response = await fetch(baseUrl + "videoinfos");
 	videoInfos = await response.json();
-	videoPoints = videoInfos.map(v => v.data).reduce((a, b) => a.concat(b));
+	streetViewPoints = Object.keys(videoInfos).map(key => videoInfos[key].data).reduce((a, b) => a.concat(b));
 
 	Object.keys(videoInfos).forEach(key => {
 		drawVideoPath(videoInfos[key]);
@@ -120,6 +120,34 @@ function highlightRoad(road) {
 	});
 }
 
+
+// distance as a crow files between 2 points in feet
+// Taken directly from https://stackoverflow.com/questions/18883601
+function calcCrow(p1, p2) 
+{
+	var lat1 = p1[0];
+	var lat2 = p2[0];
+	var lon1 = p1[1];
+	var lon2 = p2[1];
+
+	var R = 6371; // km
+	var dLat = toRad(lat2 - lat1);
+	var dLon = toRad(lon2 - lon1);
+	var lat1 = toRad(lat1);
+	var lat2 = toRad(lat2);
+
+	var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2); 
+	var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+	var d = R * c;
+	return d * 3280.84; // convert to feet
+}
+
+// converts numeric degrees to radians
+function toRad(Value) {
+	return Value * Math.PI / 180;
+}
+
 // location found stuff
 
 // mapparino.on("locationfound", function (e) {
@@ -139,8 +167,37 @@ var streetViewContainer = document.getElementById("streetview");
 var streetViewImg = document.getElementById("streetviewimg");
 var streetViewClose = document.getElementById("streetviewclose");
 mapparino.on("click", function (e) {
-	var point = [ e.latlng.lat, e.latlng.lng ];
-	streetViewImg.src = `${baseUrl}streetview/${point[0]}/${point[1]}`
+	var pointClicked = [ e.latlng.lat, e.latlng.lng ];
+
+	if (streetViewPoints.length == 0) {
+		// no video data available, so do nothing
+		return;
+	}
+
+	// find closest point
+	var bestPoint = null;
+	var bestPointScore = Infinity;
+	for (var i = 0; i < streetViewPoints.length; i++) {
+		var score = calcCrow(streetViewPoints[i].latlng, pointClicked);
+		if (score < bestPointScore) {
+			bestPoint = streetViewPoints[i];
+			bestPointScore = score;
+		}
+	}
+	var videoInfo = videoInfos[bestPoint.video];
+	var secondsIn = bestPoint.seconds_in;
+
+	// update marker
+	if (streetViewMarker == null) {
+		streetViewMarker = L.marker(bestPoint.latlng).addTo(mapparino);
+	}
+	else {
+		streetViewMarker.setLatLng(bestPoint.latlng);
+	}
+
+
+	// update image url
+	streetViewImg.src = `${baseUrl}streetview/${videoInfo.name}/${secondsIn}`;
 	if (streetViewContainer.classList.contains(streetViewHideWord)) {
 		streetViewContainer.classList.remove(streetViewHideWord);
 	}
@@ -149,6 +206,10 @@ mapparino.on("click", function (e) {
 streetViewClose.onclick = function () {
 	if (!streetViewContainer.classList.contains(streetViewHideWord)) {
 		streetViewContainer.classList.add(streetViewHideWord);
+	}
+	if (streetViewMarker != null) {
+		mapparino.removeLayer(streetViewMarker);
+		streetViewMarker = null;
 	}
 };
 
