@@ -44,10 +44,10 @@ async function startup() {
 
 
 	// fetch and draw roads
-	response = await fetch(baseUrl + "road/" + home[0] + "/" + home[1]);
-	roads = await response.json();
+	// response = await fetch(baseUrl + "road/" + home[0] + "/" + home[1]);
+	// roads = await response.json();
 
-	roads.forEach(highlightRoad);
+	// roads.forEach(highlightRoad);
 
 
 	body.classList.remove("is-loading");

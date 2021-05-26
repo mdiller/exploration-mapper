@@ -4,7 +4,9 @@ const fs = require("fs");
 const app = express();
 const ffmpeg = require("fluent-ffmpeg");
 const strava = require("strava-v3");
-const util = require("util")
+const util = require("util");
+const favicon = require("serve-favicon");
+app.use(favicon(path.join(__dirname, "public", "favicon.ico")))
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 app.use(express.static(path.join(__dirname, "public")));
