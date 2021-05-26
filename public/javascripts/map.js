@@ -16,7 +16,6 @@ let streetViewPoints = [];
 let streetViewMarker = null;
 
 
-
 (async() => {
 	await startup();
 })();
@@ -163,9 +162,14 @@ function toRad(Value) {
 // mapparino.locate({setView: true, maxZoom: 16});
 
 var streetViewHideWord = "hide";
+var streetViewVideoWord = "video";
 var streetViewContainer = document.getElementById("streetview");
+var streetViewTitle = document.getElementById("streetviewtitle");
 var streetViewImg = document.getElementById("streetviewimg");
 var streetViewClose = document.getElementById("streetviewclose");
+var streetViewSwitch = document.getElementById("streetviewswitch");
+var streetViewVideo = document.getElementById("streetviewvid");
+var streetViewVideoSource = document.getElementById("streetviewvidsource");
 mapparino.on("click", function (e) {
 	var pointClicked = [ e.latlng.lat, e.latlng.lng ];
 
@@ -184,24 +188,91 @@ mapparino.on("click", function (e) {
 			bestPointScore = score;
 		}
 	}
-	var videoInfo = videoInfos[bestPoint.video];
-	var secondsIn = bestPoint.seconds_in;
+	var newVideo = videoInfos[bestPoint.video];
+	var newVideoPointIndex = newVideo.data.indexOf(bestPoint);
+	updateStreetViewPoint(newVideo, newVideoPointIndex);
+});
+
+let currentVideoInfo = null;
+let currentVideoPointIndex = null;
+
+streetViewVideo.addEventListener("timeupdate", videoTimeUpdate, false);
+function videoTimeUpdate(e) {
+	// find the current point
+	var current_time = streetViewVideo.currentTime;
+	var i = currentVideoPointIndex;
+	var seconds_in = currentVideoInfo.data[i].seconds_in;
+
+	var seekForward = seconds_in < current_time;
+
+	while (i >= 0 && i < currentVideoInfo.data.length) {
+		seconds_in = currentVideoInfo.data[i].seconds_in;
+
+		if (current_time == seconds_in) {
+			break; 
+		}
+
+		if (seekForward) {
+			if (seconds_in > current_time) {
+				i--;
+				break;
+			}
+			i++;
+		}
+		else {
+			if (seconds_in < current_time) {
+				break;
+			}
+			i--;
+		}
+	}
+
+	if (i < 0) {
+		i = 0;
+	}
+	if (i >= currentVideoInfo.data.length) {
+		i = currentVideoInfo.data.length - 1;
+	}
+
+	if (i != currentVideoPointIndex) {
+		updateStreetViewPoint(currentVideoInfo, i, false);
+	}
+}
+
+function updateStreetViewPoint(newVideoInfo, newVideoPointIndex, set_video=true) {
+	currentVideoInfo = newVideoInfo;
+	currentVideoPointIndex = newVideoPointIndex;
+	var newPoint = currentVideoInfo.data[currentVideoPointIndex];
+
+	// update streetview title
+	streetViewTitle.innerHTML = newVideoInfo.name
 
 	// update marker
 	if (streetViewMarker == null) {
-		streetViewMarker = L.marker(bestPoint.latlng).addTo(mapparino);
+		streetViewMarker = L.marker(newPoint.latlng).addTo(mapparino);
 	}
 	else {
-		streetViewMarker.setLatLng(bestPoint.latlng);
+		streetViewMarker.setLatLng(newPoint.latlng);
 	}
 
-
-	// update image url
-	streetViewImg.src = `${baseUrl}streetview/${videoInfo.name}/${secondsIn}`;
 	if (streetViewContainer.classList.contains(streetViewHideWord)) {
 		streetViewContainer.classList.remove(streetViewHideWord);
 	}
-});
+
+	var showing_video = streetViewContainer.classList.contains(streetViewVideoWord);
+
+	// update image url
+	if (!showing_video) {
+		setLoadImageUrl();
+	}
+
+	// update video
+	if (set_video) {
+		if (showing_video) {
+			setLoadVideoUrl();
+		}
+	}
+}
 
 streetViewClose.onclick = function () {
 	if (!streetViewContainer.classList.contains(streetViewHideWord)) {
@@ -211,7 +282,38 @@ streetViewClose.onclick = function () {
 		mapparino.removeLayer(streetViewMarker);
 		streetViewMarker = null;
 	}
+	if (!streetViewVideo.paused) {
+		streetViewVideo.pause();
+	}
 };
+
+streetViewSwitch.onclick = function () {
+	if (streetViewContainer.classList.contains(streetViewVideoWord)) {
+		if (!streetViewVideo.paused) {
+			streetViewVideo.pause();
+		}
+		streetViewContainer.classList.remove(streetViewVideoWord);
+		setLoadImageUrl();
+	}
+	else {
+		streetViewContainer.classList.add(streetViewVideoWord);
+		setLoadVideoUrl();
+	}
+};
+
+function setLoadVideoUrl() {
+	// streetViewVideo.pause();
+	var newUrl = `${baseUrl}video/${currentVideoInfo.name}`;
+	if (!streetViewVideoSource.src.endsWith(newUrl)) {
+		streetViewVideoSource.src = newUrl;
+		streetViewVideo.load();
+	}
+	streetViewVideo.currentTime = currentVideoInfo.data[currentVideoPointIndex].seconds_in;
+}
+
+function setLoadImageUrl() {
+	streetViewImg.src = `${baseUrl}streetview/${currentVideoInfo.name}/${currentVideoInfo.data[currentVideoPointIndex].seconds_in}`;
+}
 
 
 function drawActivity(route) {

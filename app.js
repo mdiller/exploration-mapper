@@ -477,6 +477,30 @@ app.get("/streetview/:video/:seconds_in", async (req, res) => {
 	}
 });
 
+// stream a video
+app.get("/video/:video", (req, res) => {
+	var video = req.params.video;
+	if (streetViewPoints.length == 0) {
+		res.status(404).json({
+			"message": "no video data available"
+		});
+		return;
+	}
+	if (!(video in videoInfos)) {
+		res.status(404).json({
+			"message": "video not found"
+		});
+		return;
+	}
+
+	var videoInfo = videoInfos[video];
+	var videoFile = videoInfo.file;
+
+	var stat = fs.statSync(videoFile);
+
+	res.sendFile(path.resolve(videoFile))
+});
+
 app.use("/strava_token_authentication", async (req, res) => {
 	await getStravaAccessToken(req.query.code);
 
