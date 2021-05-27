@@ -5,7 +5,7 @@ The idea is to map out an area around my house, and see what roads nearby i have
 
 Heres a demo showing the "streetview" part of this project. This is an example showing how it works with the video and just plain images.
 
-![explorationmapper](docs/explorationmapper.mp4)
+https://user-images.githubusercontent.com/3231343/119747693-18ec6380-be48-11eb-906f-250ae11ed362.mp4
 
 # Config / Setup
 
