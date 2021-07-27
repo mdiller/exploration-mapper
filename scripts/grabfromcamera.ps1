@@ -13,22 +13,20 @@ function ResolvePath($path) {
 	$currentItem
 }
 
-function CopyFile($shellFile, $dest) {
-	Write-Host "Copying $($shellFile.Name)"
-	# not using this fucking bullshit because it spawns a new dialog for each file
-	$dest.GetFolder.CopyHere($shellFile)
-	if (-not $?) {
-		Write-Host "Error Copying File. Exiting."
-		exit 1
-	}
+try {
+	Write-Host "] Connecting to camera..."
+	$folder = ResolvePath "HERO3+ Silver Edition/External Memory/DCIM/100GOPRO"
+}
+catch {
+	Write-Host "exception connecting to camera"
+	exit 1
 }
 
 $tempDir = "$PSScriptRoot\temp"
-$folder = ResolvePath "HERO3+ Silver Edition/External Memory/DCIM/100GOPRO"
-
 If(!(test-path $tempDir))
 {
-	New-Item -ItemType Directory -Force -Path $tempDir
+	# create tempdir if it doesnt exist
+	$newdirout = New-Item -ItemType Directory -Force -Path $tempDir
 }
 
 Write-Host "] Files found:"
@@ -36,10 +34,8 @@ $folder.GetFolder.Items() | % { $_.Name }
 
 $tempDirShell = $Shell.NameSpace($tempDir).self
 
-# $folder.GetFolder.Items() | % { CopyFile $_ $tempDirShell }
-
-Write-Host "] Copying files to temp dir..."
-$tempDirShell.GetFolder.CopyHere($folder)
+Write-Host "] Moving files to temp dir..."
+$tempDirShell.GetFolder.MoveHere($folder)
 
 if (-not $?) {
 	Write-Host "Moving files failed"
@@ -57,6 +53,14 @@ rsync -azP ./ skrattpotatis:/storage/gopro/
 
 if (-not $?) {
 	Write-Host "rsync failed"
+	exit 1
+}
+
+Write-Host "] Backing up files..."
+ssh -o LogLevel=QUIET skrattpotatis "rsync -azP /storage/gopro/* /backup/gopro/"
+
+if (-not $?) {
+	Write-Host "backup failed"
 	exit 1
 }
 

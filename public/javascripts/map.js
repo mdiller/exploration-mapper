@@ -36,11 +36,13 @@ async function startup() {
 	body.classList.add("is-loading");
 	response = await fetch(baseUrl + "videoinfos");
 	videoInfos = await response.json();
-	streetViewPoints = Object.keys(videoInfos).map(key => videoInfos[key].data).reduce((a, b) => a.concat(b));
+	if (Object.keys(videoInfos).length > 0) {
+		streetViewPoints = Object.keys(videoInfos).map(key => videoInfos[key].data).reduce((a, b) => a.concat(b));
 
-	Object.keys(videoInfos).forEach(key => {
-		drawVideoPath(videoInfos[key]);
-	});
+		Object.keys(videoInfos).forEach(key => {
+			drawVideoPath(videoInfos[key]);
+		});
+	}
 
 
 	// fetch and draw roads
