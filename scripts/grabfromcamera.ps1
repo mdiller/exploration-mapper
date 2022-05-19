@@ -15,22 +15,22 @@ function ResolvePath($path) {
 
 try {
 	Write-Host "] Connecting to camera..."
-	$folder = ResolvePath "HERO3+ Silver Edition/External Memory/DCIM/100GOPRO"
+	$folder = ResolvePath "HERO3+ Silver Edition/External Memory/DCIM/121GOPRO"
+
+	$tempDir = "$PSScriptRoot\temp"
+	If(!(test-path $tempDir))
+	{
+		# create tempdir if it doesnt exist
+		$newdirout = New-Item -ItemType Directory -Force -Path $tempDir
+	}
+
+	Write-Host "] Files found:"
+	$folder.GetFolder.Items() | % { $_.Name }
 }
 catch {
 	Write-Host "exception connecting to camera"
 	exit 1
 }
-
-$tempDir = "$PSScriptRoot\temp"
-If(!(test-path $tempDir))
-{
-	# create tempdir if it doesnt exist
-	$newdirout = New-Item -ItemType Directory -Force -Path $tempDir
-}
-
-Write-Host "] Files found:"
-$folder.GetFolder.Items() | % { $_.Name }
 
 $tempDirShell = $Shell.NameSpace($tempDir).self
 

@@ -8,6 +8,8 @@ param (
 
 # adjusts the time of videos to account for clock drift
 
+$hoursBufferValue = 5 * 24
+
 if (-not $targetVideo.EndsWith(".MP4")) {
 	$targetVideo += ".MP4"
 }
@@ -74,7 +76,7 @@ if ($single) {
 else {
 	Write-Host "`nFiltering Applicable Videos..."
 	$mainDate = GetCreationDate $targetVideo
-	$targetVideos = $videoFiles | Where-Object { IsVideoSameDay $_ $mainDate 5 }
+	$targetVideos = $videoFiles | Where-Object { IsVideoSameDay $_ $mainDate $hoursBufferValue }
 	$targetVideos | % { PrintVideoInfo $_ }
 }
 
