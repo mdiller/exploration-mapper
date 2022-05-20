@@ -1,5 +1,8 @@
 FROM node:15
 
+# add bindings to ffmpeg
+ENV PATH="/usr/src/app/node_modules/ffmpeg-static/bin/linux/x64:/usr/src/app/node_modules/ffmpeg-static:/usr/src/app/node_modules/@savvyplatform/ffprobe-static/bin/linux/x64:${PATH}"
+
 # Create app directory
 WORKDIR /usr/src/app
 

@@ -44,4 +44,4 @@ Note that if you want to use the video stuff, you'll have to install ffmpeg and 
 - [x] Add a setup section to the readme so it shows how to start it up
 - [x] Make video startable from the streetview preview thing
 - [x] Setup a script to auto-grab the video from gopro and then delete
-- [ ] Setup a basic auth thing so i can have it be public but still private
+- [x] Setup a basic auth thing so i can have it be public but still private
